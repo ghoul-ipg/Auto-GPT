@@ -3,22 +3,34 @@ import abc
 
 import openai
 
-from autogpt.config import AbstractSingleton, Config
-
-cfg = Config()
-
 
 def get_ada_embedding(text):
     text = text.replace("\n", " ")
-    if cfg.use_azure:
-        return openai.Embedding.create(
-            input=[text],
-            engine=cfg.get_azure_deployment_id_for_model("text-embedding-ada-002"),
-        )["data"][0]["embedding"]
-    else:
-        return openai.Embedding.create(input=[text], model="text-embedding-ada-002")[
-            "data"
-        ][0]["embedding"]
+    return openai.Embedding.create(input=[text], model="text-embedding-ada-002")[
+        "data"
+    ][0]["embedding"]
+
+
+class Singleton(abc.ABCMeta, type):
+    """
+    Singleton metaclass for ensuring only one instance of a class.
+    """
+
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        """Call method for the singleton metaclass."""
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class AbstractSingleton(abc.ABC, metaclass=Singleton):
+    """
+    Abstract singleton class for ensuring only one instance of a class.
+    """
+
+    pass
 
 
 class MemoryProviderSingleton(AbstractSingleton):

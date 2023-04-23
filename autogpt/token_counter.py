@@ -1,16 +1,15 @@
 """Functions for counting the number of tokens in a message or string."""
 from __future__ import annotations
 
-from typing import List
-
 import tiktoken
 
-from autogpt.logs import logger
-from autogpt.types.openai import Message
+from utils import get_logger
+
+logger = get_logger(__name__)
 
 
 def count_message_tokens(
-    messages: List[Message], model: str = "gpt-3.5-turbo-0301"
+    messages: list[dict[str, str]], model: str = "gpt-3.5-turbo-0301"
 ) -> int:
     """
     Returns the number of tokens used by a list of messages.

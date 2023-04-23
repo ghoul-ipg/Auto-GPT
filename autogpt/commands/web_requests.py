@@ -8,15 +8,14 @@ from bs4 import BeautifulSoup
 from requests import Response
 from requests.compat import urljoin
 
-from autogpt.config import Config
 from autogpt.memory import get_memory
 from autogpt.processing.html import extract_hyperlinks, format_hyperlinks
+from environments import USER_AGENT
 
-CFG = Config()
-memory = get_memory(CFG)
+memory = get_memory()
 
 session = requests.Session()
-session.headers.update({"User-Agent": CFG.user_agent})
+session.headers.update({"User-Agent": USER_AGENT})
 
 
 def is_valid_url(url: str) -> bool:

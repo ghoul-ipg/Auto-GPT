@@ -29,16 +29,13 @@ class CacheContent:
 class LocalCache(MemoryProviderSingleton):
     """A class that stores the memory in a local file"""
 
-    def __init__(self, cfg) -> None:
+    def __init__(self) -> None:
         """Initialize a class instance
-
-        Args:
-            cfg: Config object
 
         Returns:
             None
         """
-        self.filename = f"{cfg.memory_index}.json"
+        self.filename = f"auto-gpt.json"
         if os.path.exists(self.filename):
             try:
                 with open(self.filename, "w+b") as f:

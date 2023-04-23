@@ -2,14 +2,17 @@ import pinecone
 from colorama import Fore, Style
 
 from autogpt.llm_utils import create_embedding_with_ada
-from autogpt.logs import logger
 from autogpt.memory.base import MemoryProviderSingleton
+from environments import PINECONE_API_KEY, PINECONE_REGION
+from utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class PineconeMemory(MemoryProviderSingleton):
-    def __init__(self, cfg):
-        pinecone_api_key = cfg.pinecone_api_key
-        pinecone_region = cfg.pinecone_region
+    def __init__(self):
+        pinecone_api_key = PINECONE_API_KEY
+        pinecone_region = PINECONE_REGION
         pinecone.init(api_key=pinecone_api_key, environment=pinecone_region)
         dimension = 1536
         metric = "cosine"
@@ -24,16 +27,12 @@ class PineconeMemory(MemoryProviderSingleton):
         try:
             pinecone.whoami()
         except Exception as e:
-            logger.typewriter_log(
-                "FAILED TO CONNECT TO PINECONE",
-                Fore.RED,
-                Style.BRIGHT + str(e) + Style.RESET_ALL,
-            )
-            logger.double_check(
+            logger.debug(f"FAILED TO CONNECT TO PINECONE: {Style.BRIGHT + str(e) + Style.RESET_ALL}")
+            logger.error(
                 "Please ensure you have setup and configured Pinecone properly for use."
                 + f"You can check out {Fore.CYAN + Style.BRIGHT}"
-                "https://github.com/Torantulino/Auto-GPT#-pinecone-api-key-setup"
-                f"{Style.RESET_ALL} to ensure you've set up everything correctly."
+                  "https://github.com/Torantulino/Auto-GPT#-pinecone-api-key-setup"
+                  f"{Style.RESET_ALL} to ensure you've set up everything correctly."
             )
             exit(1)
 

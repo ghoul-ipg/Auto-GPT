@@ -7,10 +7,10 @@ import json
 import re
 from typing import Optional
 
-from autogpt.config import Config
 from autogpt.json_utils.utilities import extract_char_position
+from utils import get_logger
 
-CFG = Config()
+logger = get_logger(__name__)
 
 
 def fix_invalid_escape(json_to_load: str, error_message: str) -> str:
@@ -27,14 +27,13 @@ def fix_invalid_escape(json_to_load: str, error_message: str) -> str:
     while error_message.startswith("Invalid \\escape"):
         bad_escape_location = extract_char_position(error_message)
         json_to_load = (
-            json_to_load[:bad_escape_location] + json_to_load[bad_escape_location + 1 :]
+                json_to_load[:bad_escape_location] + json_to_load[bad_escape_location + 1:]
         )
         try:
             json.loads(json_to_load)
             return json_to_load
         except json.JSONDecodeError as e:
-            if CFG.debug_mode:
-                print("json loads error - fix invalid escape", e)
+            logger.debug(f"json loads error - fix invalid escape, {e}")
             error_message = str(e)
     return json_to_load
 
@@ -98,27 +97,23 @@ def correct_json(json_to_load: str) -> str:
     """
 
     try:
-        if CFG.debug_mode:
-            print("json", json_to_load)
+        logger.debug(f"json: {json_to_load}")
         json.loads(json_to_load)
         return json_to_load
     except json.JSONDecodeError as e:
-        if CFG.debug_mode:
-            print("json loads error", e)
+        logger.debug(f"json loads error: {e}")
         error_message = str(e)
         if error_message.startswith("Invalid \\escape"):
             json_to_load = fix_invalid_escape(json_to_load, error_message)
         if error_message.startswith(
-            "Expecting property name enclosed in double quotes"
+                "Expecting property name enclosed in double quotes"
         ):
             json_to_load = add_quotes_to_property_names(json_to_load)
             try:
                 json.loads(json_to_load)
                 return json_to_load
             except json.JSONDecodeError as e:
-                if CFG.debug_mode:
-                    print("json loads error - add quotes", e)
-                error_message = str(e)
+                logger.debug(f"json loads error - add quotes: {e}")
         if balanced_str := balance_braces(json_to_load):
             return balanced_str
     return json_to_load

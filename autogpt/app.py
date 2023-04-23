@@ -2,17 +2,13 @@
 import json
 from typing import Dict, List, NoReturn, Union
 
-from autogpt.agent.agent_manager import AgentManager
-from autogpt.commands.command import CommandRegistry, command
+from autogpt.commands.google_search import google_official_search, google_search
 from autogpt.commands.web_requests import scrape_links, scrape_text
-from autogpt.config import Config
-from autogpt.memory import get_memory
+from autogpt.commands.web_selenium import browse_website
 from autogpt.processing.text import summarize_text
-from autogpt.prompts.generator import PromptGenerator
-from autogpt.speech import say_text
 
-CFG = Config()
-AGENT_MANAGER = AgentManager()
+from environments import GOOGLE_API_KEY
+
 
 
 def is_valid_int(value: str) -> bool:
@@ -87,12 +83,7 @@ def map_command_synonyms(command_name: str):
     return command_name
 
 
-def execute_command(
-    command_registry: CommandRegistry,
-    command_name: str,
-    arguments,
-    prompt: PromptGenerator,
-):
+def execute_command(command_name: str, arguments):
     """Execute the command and return the result
 
     Args:
@@ -103,32 +94,39 @@ def execute_command(
         str: The result of the command
     """
     try:
-        cmd = command_registry.commands.get(command_name)
-
-        # If the command is found, call it with the provided arguments
-        if cmd:
-            return cmd(**arguments)
-
-        # TODO: Remove commands below after they are moved to the command registry.
         command_name = map_command_synonyms(command_name.lower())
+        if command_name == "google":
+            # Check if the Google API key is set and use the official search method
+            # If the API key is not set or has only whitespaces, use the unofficial
+            # search method
+            key = GOOGLE_API_KEY
+            if key and key.strip() and key != "your-google-api-key":
+                google_result = google_official_search(arguments["input"])
+                return google_result
+            else:
+                google_result = google_search(arguments["input"])
 
-        if command_name == "memory_add":
-            return get_memory(CFG).add(arguments["string"])
+            # google_result can be a list or a string depending on the search results
+            if isinstance(google_result, list):
+                safe_message = [
+                    google_result_single.encode("utf-8", "ignore")
+                    for google_result_single in google_result
+                ]
+            else:
+                safe_message = google_result.encode("utf-8", "ignore")
 
-        # TODO: Change these to take in a file rather than pasted code, if
-        # non-file is given, return instructions "Input should be a python
-        # filepath, write your code to file and try again
+            return safe_message.decode("utf-8")
+        elif command_name == "get_text_summary":
+            return get_text_summary(arguments["url"], arguments["question"])
+        elif command_name == "get_hyperlinks":
+            return get_hyperlinks(arguments["url"])
+        elif command_name == "browse_website":
+            return browse_website(arguments["url"], arguments["question"])
         elif command_name == "do_nothing":
             return "No action performed."
         elif command_name == "task_complete":
             shutdown()
         else:
-            for command in prompt.commands:
-                if (
-                    command_name == command["label"].lower()
-                    or command_name == command["name"].lower()
-                ):
-                    return command["function"](**arguments)
             return (
                 f"Unknown command '{command_name}'. Please refer to the 'COMMANDS'"
                 " list for available commands and only respond in the specified JSON"
@@ -138,9 +136,6 @@ def execute_command(
         return f"Error: {str(e)}"
 
 
-@command(
-    "get_text_summary", "Get text summary", '"url": "<url>", "question": "<question>"'
-)
 def get_text_summary(url: str, question: str) -> str:
     """Return the results of a Google search
 
@@ -156,7 +151,6 @@ def get_text_summary(url: str, question: str) -> str:
     return f""" "Result" : {summary}"""
 
 
-@command("get_hyperlinks", "Get text summary", '"url": "<url>"')
 def get_hyperlinks(url: str) -> Union[str, List[str]]:
     """Return the results of a Google search
 
@@ -175,79 +169,3 @@ def shutdown() -> NoReturn:
     quit()
 
 
-@command(
-    "start_agent",
-    "Start GPT Agent",
-    '"name": "<name>", "task": "<short_task_desc>", "prompt": "<prompt>"',
-)
-def start_agent(name: str, task: str, prompt: str, model=CFG.fast_llm_model) -> str:
-    """Start an agent with a given name, task, and prompt
-
-    Args:
-        name (str): The name of the agent
-        task (str): The task of the agent
-        prompt (str): The prompt for the agent
-        model (str): The model to use for the agent
-
-    Returns:
-        str: The response of the agent
-    """
-    # Remove underscores from name
-    voice_name = name.replace("_", " ")
-
-    first_message = f"""You are {name}.  Respond with: "Acknowledged"."""
-    agent_intro = f"{voice_name} here, Reporting for duty!"
-
-    # Create agent
-    if CFG.speak_mode:
-        say_text(agent_intro, 1)
-    key, ack = AGENT_MANAGER.create_agent(task, first_message, model)
-
-    if CFG.speak_mode:
-        say_text(f"Hello {voice_name}. Your task is as follows. {task}.")
-
-    # Assign task (prompt), get response
-    agent_response = AGENT_MANAGER.message_agent(key, prompt)
-
-    return f"Agent {name} created with key {key}. First response: {agent_response}"
-
-
-@command("message_agent", "Message GPT Agent", '"key": "<key>", "message": "<message>"')
-def message_agent(key: str, message: str) -> str:
-    """Message an agent with a given key and message"""
-    # Check if the key is a valid integer
-    if is_valid_int(key):
-        agent_response = AGENT_MANAGER.message_agent(int(key), message)
-    else:
-        return "Invalid key, must be an integer."
-
-    # Speak response
-    if CFG.speak_mode:
-        say_text(agent_response, 1)
-    return agent_response
-
-
-@command("list_agents", "List GPT Agents", "")
-def list_agents() -> str:
-    """List all agents
-
-    Returns:
-        str: A list of all agents
-    """
-    return "List of agents:\n" + "\n".join(
-        [str(x[0]) + ": " + x[1] for x in AGENT_MANAGER.list_agents()]
-    )
-
-
-@command("delete_agent", "Delete GPT Agent", '"key": "<key>"')
-def delete_agent(key: str) -> str:
-    """Delete an agent with a given key
-
-    Args:
-        key (str): The key of the agent to delete
-
-    Returns:
-        str: A message indicating whether the agent was deleted or not
-    """
-    result = AGENT_MANAGER.delete_agent(key)
-    return f"Agent {key} deleted." if result else f"Agent {key} does not exist."

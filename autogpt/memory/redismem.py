@@ -11,8 +11,9 @@ from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
 from autogpt.llm_utils import create_embedding_with_ada
-from autogpt.logs import logger
 from autogpt.memory.base import MemoryProviderSingleton
+from environments import REDIS_HOST, REDIS_PORT
+from utils import get_logger
 
 SCHEMA = [
     TextField("data"),
@@ -23,58 +24,51 @@ SCHEMA = [
     ),
 ]
 
+logger = get_logger(__name__)
+
 
 class RedisMemory(MemoryProviderSingleton):
-    def __init__(self, cfg):
+    def __init__(self):
         """
         Initializes the Redis memory provider.
 
-        Args:
-            cfg: The config object.
-
         Returns: None
         """
-        redis_host = cfg.redis_host
-        redis_port = cfg.redis_port
-        redis_password = cfg.redis_password
+        redis_host = REDIS_HOST
+        redis_port = REDIS_PORT
         self.dimension = 1536
         self.redis = redis.Redis(
             host=redis_host,
             port=redis_port,
-            password=redis_password,
             db=0,  # Cannot be changed
         )
-        self.cfg = cfg
+        self.memory_index='auto-gpt'
 
         # Check redis connection
         try:
             self.redis.ping()
         except redis.ConnectionError as e:
-            logger.typewriter_log(
-                "FAILED TO CONNECT TO REDIS",
-                Fore.RED,
-                Style.BRIGHT + str(e) + Style.RESET_ALL,
-            )
-            logger.double_check(
+            logger.error(f"FAILED TO CONNECT TO REDIS:{Style.BRIGHT + str(e) + Style.RESET_ALL}")
+            logger.error(
                 "Please ensure you have setup and configured Redis properly for use. "
                 + f"You can check out {Fore.CYAN + Style.BRIGHT}"
-                f"https://github.com/Torantulino/Auto-GPT#redis-setup{Style.RESET_ALL}"
-                " to ensure you've set up everything correctly."
+                  f"https://github.com/Torantulino/Auto-GPT#redis-setup{Style.RESET_ALL}"
+                  " to ensure you've set up everything correctly."
             )
             exit(1)
 
-        if cfg.wipe_redis_on_start:
-            self.redis.flushall()
+        # if cfg.wipe_redis_on_start:
+        #     self.redis.flushall()
         try:
-            self.redis.ft(f"{cfg.memory_index}").create_index(
+            self.redis.ft(f"{self.memory_index}").create_index(
                 fields=SCHEMA,
                 definition=IndexDefinition(
-                    prefix=[f"{cfg.memory_index}:"], index_type=IndexType.HASH
+                    prefix=[f"{self.memory_index}:"], index_type=IndexType.HASH
                 ),
             )
         except Exception as e:
             print("Error creating Redis search index: ", e)
-        existing_vec_num = self.redis.get(f"{cfg.memory_index}-vec_num")
+        existing_vec_num = self.redis.get(f"{self.memory_index}-vec_num")
         self.vec_num = int(existing_vec_num.decode("utf-8")) if existing_vec_num else 0
 
     def add(self, data: str) -> str:
@@ -92,12 +86,12 @@ class RedisMemory(MemoryProviderSingleton):
         vector = np.array(vector).astype(np.float32).tobytes()
         data_dict = {b"data": data, "embedding": vector}
         pipe = self.redis.pipeline()
-        pipe.hset(f"{self.cfg.memory_index}:{self.vec_num}", mapping=data_dict)
+        pipe.hset(f"{self.memory_index}:{self.vec_num}", mapping=data_dict)
         _text = (
             f"Inserting data into memory at index: {self.vec_num}:\n" f"data: {data}"
         )
         self.vec_num += 1
-        pipe.set(f"{self.cfg.memory_index}-vec_num", self.vec_num)
+        pipe.set(f"{self.memory_index}-vec_num", self.vec_num)
         pipe.execute()
         return _text
 
@@ -141,7 +135,7 @@ class RedisMemory(MemoryProviderSingleton):
         query_vector = np.array(query_embedding).astype(np.float32).tobytes()
 
         try:
-            results = self.redis.ft(f"{self.cfg.memory_index}").search(
+            results = self.redis.ft(f"{self.memory_index}").search(
                 query, query_params={"vector": query_vector}
             )
         except Exception as e:
@@ -153,4 +147,4 @@ class RedisMemory(MemoryProviderSingleton):
         """
         Returns: The stats of the memory index.
         """
-        return self.redis.ft(f"{self.cfg.memory_index}").info()
+        return self.redis.ft(f"{self.memory_index}").info()

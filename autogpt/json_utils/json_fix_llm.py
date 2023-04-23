@@ -9,12 +9,13 @@ from typing import Any, Dict
 from colorama import Fore
 from regex import regex
 
-from autogpt.config import Config
 from autogpt.json_utils.json_fix_general import correct_json
 from autogpt.llm_utils import call_ai_function
-from autogpt.logs import logger
-from autogpt.speech import say_text
+from environments import FAST_LLM_MODEL
 
+from utils import get_logger
+
+logger = get_logger(__name__)
 JSON_SCHEMA = """
 {
     "command": {
@@ -33,8 +34,6 @@ JSON_SCHEMA = """
     }
 }
 """
-
-CFG = Config()
 
 
 def auto_fix_json(json_string: str, schema: str) -> str:
@@ -63,7 +62,7 @@ def auto_fix_json(json_string: str, schema: str) -> str:
     if not json_string.startswith("`"):
         json_string = "```json\n" + json_string + "\n```"
     result_string = call_ai_function(
-        function_string, args, description_string, model=CFG.fast_llm_model
+        function_string, args, description_string, model=FAST_LLM_MODEL
     )
     logger.debug("------------ JSON FIX ATTEMPT ---------------")
     logger.debug(f"Original JSON: {json_string}")
@@ -106,8 +105,6 @@ def fix_json_using_multiple_techniques(assistant_reply: str) -> Dict[Any, Any]:
         "Error: The following AI output couldn't be converted to a JSON:\n",
         assistant_reply,
     )
-    if CFG.speak_mode:
-        say_text("I have received an invalid JSON response from the OpenAI API.")
 
     return {}
 
@@ -168,8 +165,7 @@ def try_ai_fix(
     """
     if not try_to_fix_with_gpt:
         raise exception
-    if CFG.debug_mode:
-        logger.warn(
+    logger.warn(
             "Warning: Failed to parse AI output, attempting to fix."
             "\n If you see this warning frequently, it's likely that"
             " your prompt is confusing the AI. Try changing it up"
@@ -187,13 +183,6 @@ def try_ai_fix(
 
 
 def attempt_to_fix_json_by_finding_outermost_brackets(json_string: str):
-    if CFG.speak_mode and CFG.debug_mode:
-        say_text(
-            "I have received an invalid JSON response from the OpenAI API. "
-            "Trying to fix it now."
-        )
-        logger.error("Attempting to fix JSON by finding outermost brackets\n")
-
     try:
         json_pattern = regex.compile(r"\{(?:[^{}]|(?R))*\}")
         json_match = json_pattern.search(json_string)
@@ -201,19 +190,12 @@ def attempt_to_fix_json_by_finding_outermost_brackets(json_string: str):
         if json_match:
             # Extract the valid JSON object from the string
             json_string = json_match.group(0)
-            logger.typewriter_log(
-                title="Apparently json was fixed.", title_color=Fore.GREEN
-            )
-            if CFG.speak_mode and CFG.debug_mode:
-                say_text("Apparently json was fixed.")
+            logger.debug("Apparently json was fixed.")
         else:
             return {}
 
     except (json.JSONDecodeError, ValueError):
-        if CFG.debug_mode:
-            logger.error(f"Error: Invalid JSON: {json_string}\n")
-        if CFG.speak_mode:
-            say_text("Didn't work. I will have to ignore this response then.")
+        logger.error(f"Error: Invalid JSON: {json_string}\n")
         logger.error("Error: Invalid JSON, setting it to empty JSON now.\n")
         json_string = {}
 

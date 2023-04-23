@@ -1,0 +1,19 @@
+import os
+
+OPEN_API_KEY = os.environ.get("OPEN_API_KEY")
+SMART_LLM_MODEL = "gpt-3.5-turbo"
+FAST_LLM_MODEL = "gpt-3.5-turbo"
+FAST_TOKEN_LIMIT = 4000
+CONTINUOUS_LIMIT = 100
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+GOOGLE_CUSTOM_SEARCH_ENGINE_ID = os.environ.get("GOOGLE_CUSTOM_SEARCH_ENGINE_ID")
+MEMORY_BACKEND = "redis"
+PINECONE_API_KEY = ""
+PINECONE_REGION = ""
+
+REDIS_HOST = '127.0.0.1'
+REDIS_PORT = 6379
+
+SELENIUM_WEB_BROWSER = 'chrome'
+
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.97 Safari/537.36"
